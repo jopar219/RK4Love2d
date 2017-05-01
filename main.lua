@@ -1,4 +1,5 @@
 math.randomseed(os.time())
+_W, _H = love.graphics.getWidth(), love.graphics.getHeight()
 
 local Circle = {}
 Circle.__index = Circle
@@ -66,6 +67,10 @@ local circles = {}
 function love.update(dt)
 	for i=1,#circles do
 		circles[i][integrator](circles[i], 0, dt)
+		
+		if circles[i].y+circles[i].radius > _H then
+			circles[i].vy = -circles[i].vy
+		end
 	end
 end
 
