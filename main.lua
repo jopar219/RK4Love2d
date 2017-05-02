@@ -1,6 +1,21 @@
 math.randomseed(os.time())
 _W, _H = love.graphics.getWidth(), love.graphics.getHeight()
 
+local Vector = {}
+function Vector.new(x,y)
+	local self = setmetatable({}, Vector)
+	self.x = x
+	self.y = y
+	return self
+end
+function Vector.__add(v1,v2)
+	return Vector.new(v1.x + v2.x,v1.y + v2.y)
+end
+function Vector.__mul(v1,c)
+	return Vector.new(v1.x*c, v1.y*c)
+end
+Vector.zero = Vector.new(0,0)
+
 local Circle = {}
 Circle.__index = Circle
 
@@ -8,48 +23,43 @@ function Circle.new(color, x, y, radius)
 	local self = setmetatable({}, Circle)
 	self.color = color
 	self.radius = radius
-	self.x = x
-	
-	self.y = y
-	self.vy = 0
+	self.pos = Vector.new(x,y)
+	self.vel = Vector.new(0,0)
 	
 	return self
 end
 
 function Circle.draw(self)
 	love.graphics.setColor(self.color.r, self.color.g, self.color.b, 255)
-	love.graphics.circle("fill", self.x, self.y, self.radius)
+	love.graphics.circle("fill", self.pos.x, self.pos.y, self.radius)
 end
 
 function Circle.rk4(self, t, dt)
-	k1y = self:evaluate(t, 0, {dy = 0, dvy = 0})
-	k2y = self:evaluate(t, dt*0.5, k1y)
-	k3y = self:evaluate(t, dt*0.5, k2y)
-	k4y = self:evaluate(t, dt, k3y)
+	k1 = self:evaluate(t, 0, {vel = Vector.zero, accel = Vector.zero})
+	k2 = self:evaluate(t, dt*0.5, k1)
+	k3 = self:evaluate(t, dt*0.5, k2)
+	k4 = self:evaluate(t, dt, k3)
 	
-	self.y = self.y + dt/6*(k1y.dy + 2 * (k2y.dy + k3y.dy) + k4y.dy)
-	self.vy = self.vy + dt/6*(k1y.dvy + 2 * (k2y.dvy + k3y.dvy) + k4y.dvy)
+	self.pos = self.pos + (k1.vel + (k2.vel + k3.vel)*2 + k4.vel)*(dt/6)
+	self.vel = self.vel + (k1.accel + (k2.accel + k3.accel)*2 + k4.accel)*(dt/6)
 end
 
 function Circle.evaluate(self, t, dt, derivative)
-	--self.speedX = self.speedX + self.accelX*dt
-	--self.pos = self.pos + self.speed*dt
 	local state = {}
 	
-	state.y = self.y + derivative.dy*dt
-	state.vy = self.vy + derivative.dvy*dt
+	state.pos = self.pos + derivative.vel*dt
+	state.vel = self.vel + derivative.accel*dt
 	
-	return {dy = state.vy, dvy = self.ay(state, t+dt)}
+	return {vel = state.vel, accel = self.accel(state, t+dt)}
 end
 
 function Circle.euler(self, t, dt)
-	
-	self.y = self.y + self.vy * dt
-	self.vy = self.vy + self:ay(t+dt)*dt
+	self.pos = self.pos + self.vel * dt
+	self.vel = self.vel + self:accel(t+dt)*dt
 end
 
-function Circle.ay(self, t)
-	return 500
+function Circle.accel(self, t)
+	return Vector.new(0,1000)
 end
 
 local integrator = 'rk4'
@@ -67,12 +77,27 @@ local circles = {}
 function love.update(dt)
 	for i=1,#circles do
 		circles[i][integrator](circles[i], 0, dt)
-		if circles[i].y+circles[i].radius > _H then
+		if circles[i].pos.y+circles[i].radius > _H then
 			-- Lo que se intersecta, separar a misma distancia
 			-- Calcular la velocidad usando equaciones de movimiento
 			-- vi² = vf² - 2xa
-			circles[i].vy = -math.sqrt(math.abs(circles[i].vy*circles[i].vy-2*2*(circles[i].y+circles[i].radius-_H)*circles[i].ay(0)))
-			circles[i].y = 2*(_H-circles[i].radius)-circles[i].y
+			local vf2 = circles[i].vel.y*circles[i].vel.y
+			local x = 2*(circles[i].pos.y+circles[i].radius-_H)
+			
+			circles[i].vel.y = -math.sqrt(math.abs(vf2 - 2*x*circles[i].accel(0).y))
+			circles[i].pos.y = 2*(_H-circles[i].radius)-circles[i].pos.y
+		end
+		if circles[i].pos.x+circles[i].radius > _W then
+			local vf2 = circles[i].vel.x*circles[i].vel.x
+			local x = 2*(circles[i].pos.x+circles[i].radius-_W)
+			
+			circles[i].vel.x = -math.sqrt(math.abs(vf2 - 2*x*circles[i].accel(0).x))
+			circles[i].pos.x = 2*(_W-circles[i].radius)-circles[i].pos.x
+		elseif circles[i].pos.x-circles[i].radius < 0 then
+			local vf2 = circles[i].vel.x*circles[i].vel.x
+			local x = -2*(circles[i].pos.x-circles[i].radius)
+			circles[i].vel.x = math.sqrt(math.abs(vf2 + 2*x*circles[i].accel(0).x))
+			circles[i].pos.x = 2*circles[i].radius - circles[i].pos.x
 		end
 	end
 end
