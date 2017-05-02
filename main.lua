@@ -67,9 +67,12 @@ local circles = {}
 function love.update(dt)
 	for i=1,#circles do
 		circles[i][integrator](circles[i], 0, dt)
-		
 		if circles[i].y+circles[i].radius > _H then
-			circles[i].vy = -circles[i].vy
+			-- Lo que se intersecta, separar a misma distancia
+			-- Calcular la velocidad usando equaciones de movimiento
+			-- vi² = vf² - 2xa
+			circles[i].vy = -math.sqrt(math.abs(circles[i].vy*circles[i].vy-2*2*(circles[i].y+circles[i].radius-_H)*circles[i].ay(0)))
+			circles[i].y = 2*(_H-circles[i].radius)-circles[i].y
 		end
 	end
 end
